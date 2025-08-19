@@ -1086,15 +1086,23 @@ local function createESP(player)
     
     local esp = {
         Box = Drawing.new("Square"),
+        BoxOutline = Drawing.new("Square"),
         HealthBar = Drawing.new("Square"),
         HealthBarOutline = Drawing.new("Square")
     }
     
-    -- Настройка бокса
+    -- Настройка основного бокса
     esp.Box.Visible = false
     esp.Box.Filled = false
-    esp.Box.Thickness = 2
+    esp.Box.Thickness = 1 -- Тонкая линия
     esp.Box.Transparency = 1
+    
+    -- Настройка обводки бокса
+    esp.BoxOutline.Visible = false
+    esp.BoxOutline.Filled = false
+    esp.BoxOutline.Thickness = 1
+    esp.BoxOutline.Color = Color3.fromRGB(0, 0, 0) -- Черная обводка
+    esp.BoxOutline.Transparency = 1
     
     -- Настройка полоски здоровья
     esp.HealthBar.Visible = false
@@ -1116,6 +1124,7 @@ end
 local function updateESP(player, esp)
     if not _G.espEnabled or not player.Character or not player.Character:FindFirstChild("HumanoidRootPart") then
         esp.Box.Visible = false
+        esp.BoxOutline.Visible = false
         esp.HealthBar.Visible = false
         esp.HealthBarOutline.Visible = false
         return
@@ -1128,47 +1137,59 @@ local function updateESP(player, esp)
     
     if not humanoid or not rootPart or not head or humanoid.Health <= 0 then
         esp.Box.Visible = false
+        esp.BoxOutline.Visible = false
         esp.HealthBar.Visible = false
         esp.HealthBarOutline.Visible = false
         return
     end
     
     local camera = workspace.CurrentCamera
-    local vector, onScreen = camera:WorldToViewportPoint(rootPart.Position)
     
-    if not onScreen then
+    -- Получаем позиции головы и ног для точного размера во весь рост
+    local headPos, headOnScreen = camera:WorldToViewportPoint(head.Position + Vector3.new(0, head.Size.Y/2, 0))
+    local rootPos, rootOnScreen = camera:WorldToViewportPoint(rootPart.Position - Vector3.new(0, rootPart.Size.Y/2 + 2, 0))
+    
+    if not headOnScreen or not rootOnScreen then
         esp.Box.Visible = false
+        esp.BoxOutline.Visible = false
         esp.HealthBar.Visible = false
         esp.HealthBarOutline.Visible = false
         return
     end
     
-    local distance = (camera.CFrame.Position - rootPart.Position).Magnitude
-    local scaleFactor = 1000 / distance
-    
     -- Получение цвета команды
     local teamColor = getTeamColor(player)
     
+    -- Вычисляем размер бокса на основе реальных размеров персонажа во весь рост
+    local boxHeight = math.abs(rootPos.Y - headPos.Y)
+    local boxWidth = boxHeight * 0.5 -- Узкий бокс для тонкого вида
+    
     -- Обновление бокса
     if _G.espBoxes then
-        local boxSize = Vector2.new(scaleFactor, scaleFactor * 1.5)
-        esp.Box.Size = boxSize
-        esp.Box.Position = Vector2.new(vector.X - boxSize.X / 2, vector.Y - boxSize.Y / 2)
+        -- Обводка бокса (черная, чуть больше основного)
+        esp.BoxOutline.Size = Vector2.new(boxWidth + 2, boxHeight + 2)
+        esp.BoxOutline.Position = Vector2.new(headPos.X - (boxWidth + 2) / 2, headPos.Y - 1)
+        esp.BoxOutline.Visible = true
+        
+        -- Основной бокс (цвет команды)
+        esp.Box.Size = Vector2.new(boxWidth, boxHeight)
+        esp.Box.Position = Vector2.new(headPos.X - boxWidth / 2, headPos.Y)
         esp.Box.Color = teamColor
         esp.Box.Visible = true
     else
         esp.Box.Visible = false
+        esp.BoxOutline.Visible = false
     end
     
     -- Обновление полоски здоровья
     if _G.espHealthBars then
         local healthPercent = humanoid.Health / humanoid.MaxHealth
-        local barHeight = scaleFactor * 1.5 * healthPercent
-        local barWidth = 4
+        local barHeight = boxHeight * healthPercent
+        local barWidth = 2 -- Очень тонкая полоска
         
-        -- Позиция полоски здоровья (слева от бокса)
-        local barX = vector.X - (scaleFactor / 2) - 8
-        local barY = vector.Y - (scaleFactor * 1.5 / 2) + (scaleFactor * 1.5 * (1 - healthPercent))
+        -- Позиция полоски здоровья (слева от бокса с небольшим отступом)
+        local barX = headPos.X - (boxWidth / 2) - 6
+        local barY = headPos.Y + (boxHeight * (1 - healthPercent))
         
         -- Цвет полоски здоровья (от красного к зеленому)
         local healthColor
@@ -1178,9 +1199,9 @@ local function updateESP(player, esp)
             healthColor = Color3.fromRGB(255, 255 * (2 * healthPercent), 0)
         end
         
-        -- Контур полоски здоровья
-        esp.HealthBarOutline.Size = Vector2.new(barWidth + 2, scaleFactor * 1.5 + 2)
-        esp.HealthBarOutline.Position = Vector2.new(barX - 1, vector.Y - (scaleFactor * 1.5 / 2) - 1)
+        -- Контур полоски здоровья (обводка с обеих сторон)
+        esp.HealthBarOutline.Size = Vector2.new(barWidth + 2, boxHeight + 2)
+        esp.HealthBarOutline.Position = Vector2.new(barX - 1, headPos.Y - 1)
         esp.HealthBarOutline.Visible = true
         
         -- Сама полоска здоровья
