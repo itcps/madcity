@@ -335,70 +335,55 @@ local camera = workspace.CurrentCamera
 function aim()
     local camera = workspace.CurrentCamera
     local localPlayer = game.Players.LocalPlayer
-    local localTeam = localPlayer.TeamColor
-    local localPos = localPlayer.Character.HumanoidRootPart.Position
+    local localPlayerModel = workspace:FindFirstChild(localPlayer.Name)
+    
+    if not localPlayerModel then return nil, nil end
+    
+    local localPos = localPlayerModel:FindFirstChild("HumanoidRootPart")
+    if not localPos then return nil, nil end
+    localPos = localPos.Position
     
     local bestTarget = nil
     local shortestDistance = _G.distance or math.huge
     local screenCenter = Vector2.new(camera.ViewportSize.X / 2, camera.ViewportSize.Y / 2)
     local bestTargetPart = nil
     
-    -- Функция проверки команды
-    local function isValidTarget(targetPlayer)
-        local targetTeam = targetPlayer.TeamColor
+    -- Функция проверки команды по цвету модели или другим признакам
+    local function isValidTarget(targetModel)
+        -- Здесь нужно определить логику команд для моделей в workspace
+        -- Можно проверять по цвету частей модели, тегам, или названиям
         
-        if localTeam == BrickColor.new("Bright red") then
-            return targetTeam ~= BrickColor.new("Bright red") and 
-                   targetTeam ~= BrickColor.new("Bright orange") and 
-                   targetTeam ~= BrickColor.new("Bright violet")
-        
-        elseif localTeam == BrickColor.new("Bright orange") then
-            return targetTeam ~= BrickColor.new("Bright red") and 
-                   targetTeam ~= BrickColor.new("Bright orange") and 
-                   targetTeam ~= BrickColor.new("Bright violet")
-        
-        elseif localTeam == BrickColor.new("Bright violet") then
-            return targetTeam ~= BrickColor.new("Bright red") and 
-                   targetTeam ~= BrickColor.new("Bright orange") and 
-                   targetTeam ~= BrickColor.new("Bright violet")
-        
-        elseif localTeam == BrickColor.new("Bright blue") then
-            if targetTeam ~= BrickColor.new("Bright yellow") and 
-               targetTeam ~= BrickColor.new("Bright blue") then
-                return true
-            elseif targetTeam == BrickColor.new("Bright orange") then
-                local character = targetPlayer.Character
-                return character and (character:FindFirstChild("PrisonCrime") or character:FindFirstChild("RestrictedArea"))
+        -- Пример: проверка по цвету Head или других частей
+        local targetHead = targetModel:FindFirstChild("Head")
+        if targetHead and targetHead:IsA("BasePart") then
+            local targetTeamColor = targetHead.BrickColor
+            local localHead = localPlayerModel:FindFirstChild("Head")
+            if localHead and localHead:IsA("BasePart") then
+                local localTeamColor = localHead.BrickColor
+                -- Если цвета разные - враг
+                return targetTeamColor ~= localTeamColor
             end
-            return false
-        
-        elseif localTeam == BrickColor.new("Bright yellow") then
-            if targetTeam ~= BrickColor.new("Bright blue") and 
-               targetTeam ~= BrickColor.new("Bright yellow") then
-                return true
-            elseif targetTeam == BrickColor.new("Bright orange") then
-                local character = targetPlayer.Character
-                return character and (character:FindFirstChild("PrisonCrime") or character:FindFirstChild("RestrictedArea"))
-            end
-            return false
         end
         
-        return false
+        -- Альтернативный способ - проверка по префиксу имени или другим критериям
+        -- return targetModel.Name ~= localPlayer.Name -- просто не себя
+        
+        return true -- по умолчанию считаем врагом (измените логику под вашу игру)
     end
     
     -- Функция проверки видимости и жизнеспособности цели
-    local function isTargetValid(targetPlayer)
-        local character = targetPlayer.Character
-        if not character then return false end
+    local function isTargetValid(targetModel)
+        if not targetModel then return false end
+        if targetModel.Name == localPlayer.Name then return false end -- не целиться в себя
         
-        local humanoid = character:FindFirstChild("Humanoid")
-        local rootPart = character:FindFirstChild("HumanoidRootPart")
+        local humanoid = targetModel:FindFirstChild("Humanoid")
+        local rootPart = targetModel:FindFirstChild("HumanoidRootPart")
         
         if not humanoid or not rootPart or humanoid.Health <= 0 then
             return false
         end
         
-        if character:FindFirstChild("Downed") then
+        if targetModel:FindFirstChild("Downed") then
             return false
         end
         
@@ -417,40 +402,50 @@ function aim()
     end
     
     -- Функция получения части тела для прицеливания
-    local function getAimPart(character)
-        if _G.aimAtHead and character:FindFirstChild("Head") then
-            return character.Head
+    local function getAimPart(targetModel)
+        if _G.aimAtHead and targetModel:FindFirstChild("Head") then
+            return targetModel.Head
         else
-            return character:FindFirstChild("HumanoidRootPart") or character:FindFirstChild("UpperTorso")
+            return targetModel:FindFirstChild("HumanoidRootPart") or targetModel:FindFirstChild("UpperTorso")
         end
     end
     
-    -- Основной цикл поиска цели
-    for _, player in pairs(game.Players:GetPlayers()) do
-        if player ~= localPlayer and isValidTarget(player) and isTargetValid(player) then
-            local targetPos = player.Character.HumanoidRootPart.Position
-            local distance = (localPos - targetPos).Magnitude
-            
-            if distance < shortestDistance then
-                shortestDistance = distance
-                bestTarget = player
-                bestTargetPart = getAimPart(player.Character)
+    -- Основной цикл поиска цели среди всех моделей в workspace
+    for _, model in pairs(workspace:GetChildren()) do
+        if model:IsA("Model") and model:FindFirstChild("Humanoid") then
+            if isValidTarget(model) and isTargetValid(model) then
+                local targetPos = model.HumanoidRootPart.Position
+                local distance = (localPos - targetPos).Magnitude
+                
+                if distance < shortestDistance then
+                    shortestDistance = distance
+                    bestTarget = model
+                    bestTargetPart = getAimPart(model)
+                end
             end
         end
     end
     
     return bestTarget, bestTargetPart
 end
-		
+
 _G.aim = false
-    uis.InputBegan:Connect(function(inp)
-        if inp.UserInputType == Enum.UserInputType.MouseButton2 then
-            local player = game.Players.LocalPlayer
-        -- Проверка на Configuration в workspace (только для второй части игры)
-            local playerModel = workspace:FindFirstChild(player.Name)
-            if playerModel and playerModel:FindFirstChildOfClass("Configuration") then
+
+uis.InputBegan:Connect(function(inp)
+    if inp.UserInputType == Enum.UserInputType.MouseButton2 then
+        local player = game.Players.LocalPlayer
+        local playerModel = workspace:FindFirstChild(player.Name)
+        
+        -- Проверка на наличие оружия (Configuration или конкретное оружие)
+        if playerModel then
+            local hasWeapon = playerModel:FindFirstChildOfClass("Configuration") 
+                or playerModel:FindFirstChild("Pistol") 
+                or playerModel:FindFirstChild("Rifle")
+                or playerModel:FindFirstChild("Shotgun")
+            
+            if hasWeapon then
                 _G.aim = true
-                while wait() and _G.myaim do
+                while wait() and _G.aim do
                     local target, aimPart = aim()
                     if target and aimPart then
                         camera.CFrame = CFrame.new(camera.CFrame.Position, aimPart.Position)
@@ -459,13 +454,13 @@ _G.aim = false
                 end
             end
         end
-    end)
-    
-    uis.InputEnded:Connect(function(inp)
-        if inp.UserInputType == Enum.UserInputType.MouseButton2 then
-            _G.aim = false
-        end
-    end)
+    end
+end)
+
+uis.InputEnded:Connect(function(inp)
+    if inp.UserInputType == Enum.UserInputType.MouseButton2 then
+        _G.aim = false
+    end
 end)
 -- Добавьте элементы управления для FOV и стрельбы в голову
 example:AddBox("FOV Radius", function(object, focus)
