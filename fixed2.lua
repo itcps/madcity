@@ -17,42 +17,42 @@ local example = library:CreateWindow({
   text = "Mad city"
 })
 
--- Добавьте в начало скрипта (после создания библиотеки)
-local circle = Drawing.new("Circle")
-circle.Visible = false
-circle.Transparency = 1
-circle.Color = Color3.fromRGB(255, 0, 0)  -- Красный цвет для лучшей видимости
-circle.Thickness = 2
-circle.NumSides = 64
-circle.Filled = false
 
--- Настройки FOV по умолчанию
-_G.fovRadius = 100
-_G.fovVisible = true
-_G.aimAtHead = false  -- Новый тоггл для стрельбы в голову
 
--- Функция для обновления FOV круга
-local function updateFovCircle()
-    if not circle then 
-        circle = Drawing.new("Circle")
-        circle.Visible = false
-        circle.Transparency = 1
-        circle.Color = Color3.fromRGB(255, 0, 0)
-        circle.Thickness = 2
-        circle.NumSides = 64
-        circle.Filled = false
+-- Добавьте эту переменную в начало скрипта
+local fovCircle = nil
+
+-- Добавьте эту функцию для создания/обновления FOV круга
+local function createOrUpdateFovCircle()
+    if not fovCircle then
+        fovCircle = Drawing.new("Circle")
+        fovCircle.Visible = false
+        fovCircle.Transparency = 1
+        fovCircle.Color = Color3.fromRGB(255, 0, 0)
+        fovCircle.Thickness = 2
+        fovCircle.NumSides = 64
+        fovCircle.Filled = false
     end
     
-    circle.Visible = _G.fovVisible and _G.myaim
-    circle.Radius = _G.fovRadius
+    fovCircle.Visible = _G.fovVisible and _G.myaim
+    fovCircle.Radius = _G.fovRadius
+    
     local camera = workspace.CurrentCamera
     if camera then
-        circle.Position = Vector2.new(camera.ViewportSize.X / 2, camera.ViewportSize.Y / 2)
+        fovCircle.Position = Vector2.new(camera.ViewportSize.X / 2, camera.ViewportSize.Y / 2)
     end
 end
 
 -- Запускаем обновление круга каждый кадр
-game:GetService("RunService").RenderStepped:Connect(updateFovCircle)
+game:GetService("RunService").RenderStepped:Connect(function()
+    if _G.fovVisible and _G.myaim then
+        createOrUpdateFovCircle()
+    elseif fovCircle then
+        fovCircle.Visible = false
+    end
+end)
+
+
 
 
 example:AddToggle("Anti Report", function(state)
@@ -559,6 +559,7 @@ end)
 local uis = game:GetService("UserInputService")
 local camera = workspace.CurrentCamera
 
+-- Обновите функцию aim для правильного прицеливания в голову
 function aim()
     local camera = workspace.CurrentCamera
     local localPlayer = game.Players.LocalPlayer
@@ -568,32 +569,27 @@ function aim()
     local bestTarget = nil
     local shortestDistance = _G.distance or math.huge
     local screenCenter = Vector2.new(camera.ViewportSize.X / 2, camera.ViewportSize.Y / 2)
-    local bestTargetPart = nil  -- Для хранения части тела цели
-			
+    local bestTargetPart = nil
     
     -- Функция проверки команды
     local function isValidTarget(targetPlayer)
         local targetTeam = targetPlayer.TeamColor
         
-        -- Проверка для преступников (красные)
         if localTeam == BrickColor.new("Bright red") then
             return targetTeam ~= BrickColor.new("Bright red") and 
                    targetTeam ~= BrickColor.new("Bright orange") and 
                    targetTeam ~= BrickColor.new("Bright violet")
         
-        -- Проверка для бандитов (оранжевые)
         elseif localTeam == BrickColor.new("Bright orange") then
             return targetTeam ~= BrickColor.new("Bright red") and 
                    targetTeam ~= BrickColor.new("Bright orange") and 
                    targetTeam ~= BrickColor.new("Bright violet")
         
-        -- Проверка для мафии (фиолетовые)
         elseif localTeam == BrickColor.new("Bright violet") then
             return targetTeam ~= BrickColor.new("Bright red") and 
                    targetTeam ~= BrickColor.new("Bright orange") and 
                    targetTeam ~= BrickColor.new("Bright violet")
         
-        -- Проверка для полиции (синие)
         elseif localTeam == BrickColor.new("Bright blue") then
             if targetTeam ~= BrickColor.new("Bright yellow") and 
                targetTeam ~= BrickColor.new("Bright blue") then
@@ -604,7 +600,6 @@ function aim()
             end
             return false
         
-        -- Проверка для SWAT (желтые)
         elseif localTeam == BrickColor.new("Bright yellow") then
             if targetTeam ~= BrickColor.new("Bright blue") and 
                targetTeam ~= BrickColor.new("Bright yellow") then
@@ -642,7 +637,6 @@ function aim()
         local screenPoint = Vector2.new(screenPos.X, screenPos.Y)
         local distanceToCenter = (screenPoint - screenCenter).Magnitude
         
-        -- Проверяем, находится ли цель в пределах FOV
         if distanceToCenter > (_G.fovRadius or 100) then
             return false
         end
@@ -650,6 +644,7 @@ function aim()
         return true
     end
     
+    -- Функция получения части тела для прицеливания
     local function getAimPart(character)
         if _G.aimAtHead and character:FindFirstChild("Head") then
             return character.Head
@@ -674,6 +669,7 @@ function aim()
     
     return bestTarget, bestTargetPart
 end
+		
 _G.aim = false
     uis.InputBegan:Connect(function(inp)
         if inp.UserInputType == Enum.UserInputType.MouseButton2 then
