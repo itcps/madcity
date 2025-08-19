@@ -448,7 +448,7 @@ _G.aim = false
             local player = game.Players.LocalPlayer
         -- Проверка на Configuration в workspace (только для второй части игры)
             local playerModel = workspace:FindFirstChild(player.Name)
-            if game.Players.LocalPlayer.Character:FindFirstChildOfClass("Tool") or playerModel and playerModel:FindFirstChildOfClass("Configuration") then
+            if playerModel and playerModel:FindFirstChildOfClass("Configuration") then
                 _G.aim = true
                 while wait() and _G.myaim do
                     local target, aimPart = aim()
