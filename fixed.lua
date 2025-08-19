@@ -2,33 +2,8 @@ Instance.new("Vector3Value",game.Players.LocalPlayer).Name = "btp"
 Instance.new("StringValue",game.Players.LocalPlayer).Name = "maddancemoves"
 game.Players.LocalPlayer.maddancemoves.Value = game.Players.LocalPlayer.Name
 
--- Добавьте в начало скрипта (после создания библиотеки)
-local circle = Drawing.new("Circle")
-circle.Visible = false
-circle.Transparency = 1
-circle.Color = Color3.fromRGB(255, 255, 255)
-circle.Thickness = 1
-circle.NumSides = 100
-circle.Filled = false
 
--- Настройки FOV по умолчанию
-_G.fovRadius = 100
-_G.fovVisible = true
 
--- Функция для обновления FOV круга
-local function updateFovCircle()
-    if not circle then return end
-    
-    circle.Visible = _G.fovVisible and _G.myaim
-    circle.Radius = _G.fovRadius
-    local camera = workspace.CurrentCamera
-    if camera then
-        circle.Position = Vector2.new(camera.ViewportSize.X / 2, camera.ViewportSize.Y / 2)
-    end
-end
-
--- Запускаем обновление круга каждый кадр
-game:GetService("RunService").RenderStepped:Connect(updateFovCircle)
 
 for i,v in pairs(workspace.ObjectSelection:GetDescendants()) do
 	if v.Name == "Event" and v.Parent.Name == "Pullups" or  v.Name == "Event" and v.Parent.Name == "Treadmill" or v.Name == "Event" and v.Parent.Name == "BenchPress" then
@@ -41,6 +16,44 @@ local library = loadstring(game:HttpGet("https://raw.githubusercontent.com/Marco
 local example = library:CreateWindow({
   text = "Mad city"
 })
+
+-- Добавьте в начало скрипта (после создания библиотеки)
+local circle = Drawing.new("Circle")
+circle.Visible = false
+circle.Transparency = 1
+circle.Color = Color3.fromRGB(255, 0, 0)  -- Красный цвет для лучшей видимости
+circle.Thickness = 2
+circle.NumSides = 64
+circle.Filled = false
+
+-- Настройки FOV по умолчанию
+_G.fovRadius = 100
+_G.fovVisible = true
+_G.aimAtHead = false  -- Новый тоггл для стрельбы в голову
+
+-- Функция для обновления FOV круга
+local function updateFovCircle()
+    if not circle then 
+        circle = Drawing.new("Circle")
+        circle.Visible = false
+        circle.Transparency = 1
+        circle.Color = Color3.fromRGB(255, 0, 0)
+        circle.Thickness = 2
+        circle.NumSides = 64
+        circle.Filled = false
+    end
+    
+    circle.Visible = _G.fovVisible and _G.myaim
+    circle.Radius = _G.fovRadius
+    local camera = workspace.CurrentCamera
+    if camera then
+        circle.Position = Vector2.new(camera.ViewportSize.X / 2, camera.ViewportSize.Y / 2)
+    end
+end
+
+-- Запускаем обновление круга каждый кадр
+game:GetService("RunService").RenderStepped:Connect(updateFovCircle)
+
 
 example:AddToggle("Anti Report", function(state)
 _G.re = (state and true or false)
@@ -555,6 +568,8 @@ function aim()
     local bestTarget = nil
     local shortestDistance = _G.distance or math.huge
     local screenCenter = Vector2.new(camera.ViewportSize.X / 2, camera.ViewportSize.Y / 2)
+    local bestTargetPart = nil  -- Для хранения части тела цели
+			
     
     -- Функция проверки команды
     local function isValidTarget(targetPlayer)
@@ -635,6 +650,14 @@ function aim()
         return true
     end
     
+    local function getAimPart(character)
+        if _G.aimAtHead and character:FindFirstChild("Head") then
+            return character.Head
+        else
+            return character:FindFirstChild("HumanoidRootPart") or character:FindFirstChild("UpperTorso")
+        end
+    end
+    
     -- Основной цикл поиска цели
     for _, player in pairs(game.Players:GetPlayers()) do
         if player ~= localPlayer and isValidTarget(player) and isTargetValid(player) then
@@ -644,11 +667,12 @@ function aim()
             if distance < shortestDistance then
                 shortestDistance = distance
                 bestTarget = player
+                bestTargetPart = getAimPart(player.Character)
             end
         end
     end
     
-    return bestTarget
+    return bestTarget, bestTargetPart
 end
 _G.aim = false
     uis.InputBegan:Connect(function(inp)
@@ -656,9 +680,9 @@ _G.aim = false
             if game.Players.LocalPlayer.Character:FindFirstChildOfClass("Tool") then
                 _G.aim = true
                 while wait() and _G.myaim do
-                    local target = aim()
-                    if target then
-                        camera.CFrame = CFrame.new(camera.CFrame.Position, target.Character.HumanoidRootPart.Position)
+                    local target, aimPart = aim()
+                    if target and aimPart then
+                        camera.CFrame = CFrame.new(camera.CFrame.Position, aimPart.Position)
                     end
                     if _G.aim == false then return end
                 end
@@ -672,6 +696,7 @@ _G.aim = false
         end
     end)
 end)
+-- Добавьте элементы управления для FOV и стрельбы в голову
 example:AddBox("FOV Radius", function(object, focus)
     if focus then
         _G.fovRadius = tonumber(object.Text) or 100
@@ -679,7 +704,12 @@ example:AddBox("FOV Radius", function(object, focus)
 end)
 
 example:AddToggle("Show FOV Circle", function(state)
-    _G.fovVisible = (state and true or false)
+    _G.fovVisible = state
+end)
+
+-- Новый тоггл для стрельбы в голову
+example:AddToggle("Aim at Head", function(state)
+    _G.aimAtHead = state
 end)
 example:AddToggle("First Person Mode", function(state)
 _G.coeman = (state and true or false)
