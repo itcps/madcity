@@ -1309,3 +1309,322 @@ game:GetService("RunService").RenderStepped:Connect(function()
         end
     end
 end)
+
+
+_G.crateESPEnabled = false
+_G.crateESPBoxes = false
+_G.crateESPLines = false
+_G.crateESPDistance = false
+
+-- Хранилище ESP объектов для ящиков
+local crateESPObjects = {}
+
+-- Функция создания ESP для ящика
+local function createCrateESP(crate)
+    local esp = {
+        Box = Drawing.new("Square"),
+        BoxOutline = Drawing.new("Square"),
+        Line = Drawing.new("Line"),
+        Distance = Drawing.new("Text")
+    }
+    
+    -- Настройка основного бокса
+    esp.Box.Visible = false
+    esp.Box.Filled = false
+    esp.Box.Thickness = 2
+    esp.Box.Transparency = 1
+    
+    -- Настройка обводки бокса
+    esp.BoxOutline.Visible = false
+    esp.BoxOutline.Filled = false
+    esp.BoxOutline.Thickness = 3
+    esp.BoxOutline.Color = Color3.fromRGB(0, 0, 0) -- Черная обводка
+    esp.BoxOutline.Transparency = 1
+    
+    -- Настройка линии
+    esp.Line.Visible = false
+    esp.Line.Thickness = 2
+    esp.Line.Transparency = 1
+    
+    -- Настройка текста расстояния
+    esp.Distance.Visible = false
+    esp.Distance.Center = true
+    esp.Distance.Outline = true
+    esp.Distance.OutlineColor = Color3.fromRGB(0, 0, 0)
+    esp.Distance.Size = 16
+    esp.Distance.Font = Drawing.Fonts.UI
+    
+    crateESPObjects[crate] = esp
+end
+
+-- Функция получения цвета ящика
+local function getCrateColor(crateName)
+    if crateName == "CrateDrop" then
+        return Color3.fromRGB(255, 165, 0) -- Оранжевый для обычных ящиков
+    elseif crateName == "CashCrateDrop" then
+        return Color3.fromRGB(0, 255, 0) -- Зеленый для денежных ящиков
+    else
+        return Color3.fromRGB(255, 255, 255) -- Белый по умолчанию
+    end
+end
+
+-- Функция обновления ESP для ящика
+local function updateCrateESP(crate, esp)
+    if not _G.crateESPEnabled or not crate or not crate.Parent then
+        esp.Box.Visible = false
+        esp.BoxOutline.Visible = false
+        esp.Line.Visible = false
+        esp.Distance.Visible = false
+        return
+    end
+    
+    local camera = workspace.CurrentCamera
+    local localPlayer = game.Players.LocalPlayer
+    
+    if not localPlayer.Character or not localPlayer.Character:FindFirstChild("HumanoidRootPart") then
+        esp.Box.Visible = false
+        esp.BoxOutline.Visible = false
+        esp.Line.Visible = false
+        esp.Distance.Visible = false
+        return
+    end
+    
+    local cratePosition = crate.Position
+    local screenPos, onScreen = camera:WorldToViewportPoint(cratePosition)
+    
+    if not onScreen then
+        esp.Box.Visible = false
+        esp.BoxOutline.Visible = false
+        esp.Line.Visible = false
+        esp.Distance.Visible = false
+        return
+    end
+    
+    -- Получение цвета ящика
+    local crateColor = getCrateColor(crate.Name)
+    
+    -- Расчет расстояния
+    local distance = (localPlayer.Character.HumanoidRootPart.Position - cratePosition).Magnitude
+    local boxSize = math.clamp(5000 / distance, 20, 100) -- Размер бокса зависит от расстояния
+    
+    -- Обновление бокса
+    if _G.crateESPBoxes then
+        -- Обводка бокса (черная, чуть больше основного)
+        esp.BoxOutline.Size = Vector2.new(boxSize + 4, boxSize + 4)
+        esp.BoxOutline.Position = Vector2.new(screenPos.X - (boxSize + 4) / 2, screenPos.Y - (boxSize + 4) / 2)
+        esp.BoxOutline.Visible = true
+        
+        -- Основной бокс (цвет ящика)
+        esp.Box.Size = Vector2.new(boxSize, boxSize)
+        esp.Box.Position = Vector2.new(screenPos.X - boxSize / 2, screenPos.Y - boxSize / 2)
+        esp.Box.Color = crateColor
+        esp.Box.Visible = true
+    else
+        esp.Box.Visible = false
+        esp.BoxOutline.Visible = false
+    end
+    
+    -- Обновление линии
+    if _G.crateESPLines then
+        local screenCenter = Vector2.new(camera.ViewportSize.X / 2, camera.ViewportSize.Y)
+        esp.Line.From = screenCenter
+        esp.Line.To = Vector2.new(screenPos.X, screenPos.Y)
+        esp.Line.Color = crateColor
+        esp.Line.Visible = true
+    else
+        esp.Line.Visible = false
+    end
+    
+    -- Обновление текста расстояния
+    if _G.crateESPDistance then
+        esp.Distance.Position = Vector2.new(screenPos.X, screenPos.Y + boxSize / 2 + 15)
+        esp.Distance.Text = string.format("%s [%dm]", crate.Name, math.floor(distance / 3.571)) -- Конвертация в метры
+        esp.Distance.Color = crateColor
+        esp.Distance.Visible = true
+    else
+        esp.Distance.Visible = false
+    end
+end
+
+-- Функция удаления ESP для ящика
+local function removeCrateESP(crate)
+    if crateESPObjects[crate] then
+        for _, drawing in pairs(crateESPObjects[crate]) do
+            drawing:Remove()
+        end
+        crateESPObjects[crate] = nil
+    end
+end
+
+-- Функция поиска ящиков в workspace
+local function findCrates()
+    local crates = {}
+    
+    -- Рекурсивный поиск ящиков во всех потомках workspace
+    local function searchForCrates(parent)
+        for _, child in pairs(parent:GetChildren()) do
+            if child.Name == "CrateDrop" or child.Name == "CashCrateDrop" then
+                if child:IsA("BasePart") then
+                    table.insert(crates, child)
+                end
+            end
+            -- Продолжаем поиск в дочерних объектах
+            searchForCrates(child)
+        end
+    end
+    
+    searchForCrates(workspace)
+    return crates
+end
+
+-- Функция обновления списка ящиков
+local function updateCratesList()
+    local currentCrates = findCrates()
+    local existingCrates = {}
+    
+    -- Добавляем новые ящики
+    for _, crate in pairs(currentCrates) do
+        if not crateESPObjects[crate] then
+            createCrateESP(crate)
+        end
+        existingCrates[crate] = true
+    end
+    
+    -- Удаляем исчезнувшие ящики
+    for crate, _ in pairs(crateESPObjects) do
+        if not existingCrates[crate] or not crate.Parent then
+            removeCrateESP(crate)
+        end
+    end
+end
+
+-- Создание вкладки ESP для ящиков
+local crateESPWindow = library:CreateWindow({
+    text = "Crates ESP"
+})
+
+-- Основной тоггл ESP для ящиков
+crateESPWindow:AddToggle("Enable Crates ESP", function(state)
+    _G.crateESPEnabled = state
+    
+    if not state then
+        -- Скрыть все ESP объекты при отключении
+        for crate, esp in pairs(crateESPObjects) do
+            esp.Box.Visible = false
+            esp.BoxOutline.Visible = false
+            esp.Line.Visible = false
+            esp.Distance.Visible = false
+        end
+    end
+end)
+
+-- Тоггл ESP боксов для ящиков
+crateESPWindow:AddToggle("Crate Boxes", function(state)
+    _G.crateESPBoxes = state
+    
+    if not state then
+        -- Скрыть все боксы
+        for crate, esp in pairs(crateESPObjects) do
+            esp.Box.Visible = false
+            esp.BoxOutline.Visible = false
+        end
+    end
+end)
+
+-- Тоггл линий к ящикам
+crateESPWindow:AddToggle("Lines to Crates", function(state)
+    _G.crateESPLines = state
+    
+    if not state then
+        -- Скрыть все линии
+        for crate, esp in pairs(crateESPObjects) do
+            esp.Line.Visible = false
+        end
+    end
+end)
+
+-- Тоггл отображения расстояния до ящиков
+crateESPWindow:AddToggle("Show Distance", function(state)
+    _G.crateESPDistance = state
+    
+    if not state then
+        -- Скрыть весь текст расстояния
+        for crate, esp in pairs(crateESPObjects) do
+            esp.Distance.Visible = false
+        end
+    end
+end)
+
+-- Кнопка для телепорта к ближайшему ящику
+crateESPWindow:AddButton("Teleport to Nearest Crate", function()
+    local localPlayer = game.Players.LocalPlayer
+    if not localPlayer.Character or not localPlayer.Character:FindFirstChild("HumanoidRootPart") then
+        return
+    end
+    
+    local nearestCrate = nil
+    local nearestDistance = math.huge
+    local localPosition = localPlayer.Character.HumanoidRootPart.Position
+    
+    -- Поиск ближайшего ящика
+    for crate, _ in pairs(crateESPObjects) do
+        if crate and crate.Parent then
+            local distance = (localPosition - crate.Position).Magnitude
+            if distance < nearestDistance then
+                nearestDistance = distance
+                nearestCrate = crate
+            end
+        end
+    end
+    
+    -- Телепорт к ближайшему ящику
+    if nearestCrate then
+        if not game:GetService("Players").LocalPlayer:FindFirstChild("TeleportLocation") then
+            local CFrameEnd = nearestCrate.CFrame + Vector3.new(0, 10, 0)
+            local Time = 2
+            local tween = game:GetService("TweenService"):Create(localPlayer.Character.HumanoidRootPart, TweenInfo.new(Time), {CFrame = CFrameEnd})
+            tween:Play()
+        else
+            localPlayer.Character.HumanoidRootPart.CFrame = nearestCrate.CFrame + Vector3.new(0, 10, 0)
+        end
+    end
+end)
+
+-- Основной цикл обновления ESP для ящиков
+spawn(function()
+    while wait(1) do -- Обновляем список ящиков каждую секунду
+        if _G.crateESPEnabled then
+            updateCratesList()
+        end
+    end
+end)
+
+-- Цикл обновления визуальных элементов ESP
+game:GetService("RunService").RenderStepped:Connect(function()
+    if not _G.crateESPEnabled then return end
+    
+    for crate, esp in pairs(crateESPObjects) do
+        if crate and crate.Parent then
+            updateCrateESP(crate, esp)
+        else
+            removeCrateESP(crate)
+        end
+    end
+end)
+
+-- Обработчик изменений в workspace для отслеживания новых ящиков
+workspace.DescendantAdded:Connect(function(descendant)
+    if _G.crateESPEnabled and (descendant.Name == "CrateDrop" or descendant.Name == "CashCrateDrop") then
+        if descendant:IsA("BasePart") then
+            wait(0.1) -- Небольшая задержка для корректной инициализации
+            createCrateESP(descendant)
+        end
+    end
+end)
+
+-- Обработчик удаления ящиков из workspace
+workspace.DescendantRemoving:Connect(function(descendant)
+    if crateESPObjects[descendant] then
+        removeCrateESP(descendant)
+    end
+end)
