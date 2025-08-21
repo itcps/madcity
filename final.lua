@@ -549,6 +549,9 @@ while _G.showplayer do
 end)
 end
 end)
+	  example:AddToggle("Enable in transport", function(state)
+		_G.transport = (state and true or false)
+	end)
 	  example:AddBox("Aimbot Distance", function(object, focus)
 		if focus then
 		   _G.distance = tonumber(object.Text)
@@ -673,16 +676,31 @@ end
 _G.aim = false
     uis.InputBegan:Connect(function(inp)
         if inp.UserInputType == Enum.UserInputType.MouseButton2 then
-            if game.Players.LocalPlayer.Character:FindFirstChildOfClass("Tool") then
-                _G.aim = true
-                while wait() and _G.myaim do
-                    local target, aimPart = aim()
-                    if target and aimPart then
-                        camera.CFrame = CFrame.new(camera.CFrame.Position, aimPart.Position)
-                    end
-                    if _G.aim == false then return end
-                end
-            end
+			local player = game.Players.LocalPlayer
+        	local playerModel = workspace:FindFirstChild(player.Name)
+			if _G.transport == true then
+						if game.Players.LocalPlayer.Character:FindFirstChildOfClass("Tool") or playerModel:FindFirstChildOfClass("Tool")  then
+			                _G.aim = true
+			                while wait() and _G.myaim do
+			                    local target, aimPart = aim()
+			                    if target and aimPart then
+			                        camera.CFrame = CFrame.new(camera.CFrame.Position, aimPart.Position)
+			                    end
+			                    if _G.aim == false then return end
+			                end
+			            end
+					else
+			            if game.Players.LocalPlayer.Character:FindFirstChildOfClass("Tool") then
+			                _G.aim = true
+			                while wait() and _G.myaim do
+			                    local target, aimPart = aim()
+			                    if target and aimPart then
+			                        camera.CFrame = CFrame.new(camera.CFrame.Position, aimPart.Position)
+			                    end
+			                    if _G.aim == false then return end
+			                end
+			            end
+					end
         end
     end)
     
